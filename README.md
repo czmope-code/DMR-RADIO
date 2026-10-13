@@ -6,7 +6,7 @@ WPF klient pro Homebrew/MMDVM přes UDP. Přihlášení a uložení nastavení v
 
 Aplikace přijímá pakety DMRD, vybírá pouze skupinový hovor pro zvolenou TG a timeslot a z 33bajtového burstu skládá tři 72bitové AMBE+2 kanálově kódované rámce. Rámce nejsou v burstu uloženy jako tři sousední devítibajtové bloky: jejich části A/B/C jsou prokládané a druhý rámec je rozdělen kolem 48bitového sync/embedded pole. Dekódování musí zpracovat i kanálové kódování, které z těchto 72 bitů obnovuje vlastní 49bitová hlasová data.
 
-`IVocoder` je rozhraní pro dekodér a kodér. Aplikace se pokusí načíst OpenDMR (`libopendmr.dll`) přes C API. Pokud knihovna chybí nebo je nekompatibilní, použije `NullVocoder`, který vrací ticho pro RX a nulové rámce pro TX; aplikace tuto skutečnost zapíše do logu. Po připojení OpenDMR se zvuk přehrává přes NAudio v 8 kHz mono s jitter bufferem přibližně 60 ms. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
+`IVocoder` je rozhraní pro dekodér a kodér. Aplikace potřebuje OpenDMR (`libopendmr.dll`) přes C API; bez něj použije `NullVocoder`, který vrací ticho pro RX a nulové rámce pro TX. Při hovoru se do logu zapíše, zda je OpenDMR aktivní, a případná chyba dekódování. Návod níže sestaví DLL pro Windows a projekt ji při dalším buildu automaticky zkopíruje vedle EXE. Se skutečným dekodérem se zvuk přehrává přes NAudio v 8 kHz mono s jitter bufferem přibližně 60 ms. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
 
 Výstupní reproduktor/sluchátka lze vybrat v seznamu **VÝSTUP ZVUKU** pod posuvníkem hlasitosti. Volba „Výchozí zařízení Windows“ použije aktuální výchozí zařízení. Výběr se uloží do nastavení; změna během hovoru restartuje lokální přehrávač.
 
@@ -14,15 +14,21 @@ Výstupní reproduktor/sluchátka lze vybrat v seznamu **VÝSTUP ZVUKU** pod pos
 
 Adaptér `OpenDmrVocoder` volá `opendmr_decoder_create/opendmr_decode` a `opendmr_encoder_create/opendmr_encode`. OpenDMR přebírá dekódování 72bitového rámce v kanonickém pořadí A+B+C, které vytváří `DmrVoiceBurstCodec`; vrací 160 PCM vzorků a používá stejný formát při kódování pro TX. Zdrojový kód OpenDMR ani jeho binární knihovna nejsou v tomto repozitáři.
 
-1. Získej zdrojový kód z [MW0MWZ/OpenDMR](https://github.com/MW0MWZ/OpenDMR) a zkontroluj jeho README, licenci a `decoder/CREDITS`/`encoder/CREDITS`.
-2. V prostředí MSYS2 MINGW64 s GCC/G++ a GNU Make sestav DLL:
+1. Nainstaluj [MSYS2](https://www.msys2.org/) a v terminálu **MSYS2 MINGW64** nainstaluj nástroje:
 
    ```sh
-   make SHARED_EXT=dll SHARED_FLAGS="-shared -Wl,--export-all-symbols"
+   pacman -S --needed mingw-w64-x86_64-gcc make
    ```
 
-   Výsledkem podle Makefile upstreamu má být `libopendmr.dll`. Zkopíruj DLL a případné MinGW runtime DLL závislosti vedle `DMR-RADIO.exe`. Build upstream Makefile na Windows zde nebyl ověřen.
-3. Spusť aplikaci a ověř log: bez nativní knihovny je použit `NullVocoder`; při jejím úspěšném načtení log tuto fallback zprávu nevypíše.
+2. V PowerShellu z kořene repozitáře spusť:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\Build-OpenDmr.ps1
+   dotnet build DMR-RADIO.slnx
+   dotnet run --project .\DMR-RADIO\DMR-RADIO.csproj
+   ```
+
+   Skript stáhne neměnnou revizi OpenDMR `d28164b39ba4d91ad5948ff22707937f8944f70f`, sestaví DLL s MinGW a umístí ji do ignorované složky `DMR-RADIO\Native`. MSBuild ji automaticky přidá do výstupní i publish složky aplikace. Při hovoru musí log zobrazit **OpenDMR AMBE+2 dekodér je aktivní.** Pokud místo toho hlásí chybějící dekodér nebo chybu AMBE, audio nepůjde; při úspěšném dekódování zkontroluj vybraný výstup zvuku a hlasitost.
 
 OpenDMR je pod **GNU GPL v2** a obsahuje GPL části mbelib-neo a OP25. Dynamické propojení z této aplikace může mít dopad na licenční podmínky celé distribuované aplikace; před distribucí si ověř povinnosti GPL a právo distribuovat výslednou aplikaci. GPL samo o sobě není patentová licence AMBE. Toto není právní rada.
 

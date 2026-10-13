@@ -540,11 +540,15 @@ public sealed class MainViewModel : ObservableObject
             _audioPlayer = new AudioPlayer(SelectedAudioOutputDevice.DeviceNumber) { Volume = Volume };
             var vocoder = OpenDmrVocoder.CreateOrFallback(out var warning);
             if (warning is not null)
-                AddLog($"RX zůstane tichý: {warning}. Nainstaluj libopendmr.dll vedle aplikace.");
+                AddLog($"RX bude tichý (chybí AMBE+2 dekodér): {warning}. Spusť scripts\\Build-OpenDmr.ps1 a aplikaci znovu sestav.");
+            else
+                AddLog("OpenDMR AMBE+2 dekodér je aktivní.");
             _jitterBuffer = new JitterBuffer(vocoder, _audioPlayer)
             {
                 TargetLatencyMs = 60
             };
+            _jitterBuffer.DecodeError += exception => Post(() =>
+                AddLog($"Chyba dekódování AMBE+2: {exception.Message}"));
             _jitterBuffer.LevelChanged += level => Post(() =>
             {
                 if (_callActive)

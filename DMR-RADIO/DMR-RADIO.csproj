@@ -13,4 +13,11 @@
     <PackageReference Include="NAudio" Version="3.1.0" />
   </ItemGroup>
 
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Native\libopendmr.dll')">
+    <Content Include="$(MSBuildProjectDirectory)\Native\libopendmr.dll"
+             Link="libopendmr.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

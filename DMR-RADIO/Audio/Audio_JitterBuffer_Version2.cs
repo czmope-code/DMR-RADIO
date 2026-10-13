@@ -15,8 +15,10 @@ namespace DMR_RADIO.Audio
         private readonly CancellationTokenSource _cts = new();
         private Task? _consumer;
         private bool _started;
+        private int _decodeErrorReported;
         public int TargetLatencyMs { get; set; } = 60;
         public event Action<double>? LevelChanged;
+        public event Action<Exception>? DecodeError;
 
         public JitterBuffer(IVocoder vocoder, AudioPlayer player)
         {
@@ -78,11 +80,13 @@ namespace DMR_RADIO.Audio
                             _player.AddPcm(pcm);
                             LevelChanged?.Invoke(GetLevel(pcm));
                         }
-                        catch
+                        catch (Exception ex)
                         {
                             var silence = new short[160];
                             _player.AddPcm(silence);
                             LevelChanged?.Invoke(0);
+                            if (Interlocked.Exchange(ref _decodeErrorReported, 1) == 0)
+                                DecodeError?.Invoke(ex);
                         }
                     }
                     else
