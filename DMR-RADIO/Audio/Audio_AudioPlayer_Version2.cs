@@ -8,7 +8,7 @@ namespace DMR_RADIO.Audio
     /// </summary>
     public class AudioPlayer : IDisposable
     {
-        private readonly WaveOutEvent _waveOut;
+        private readonly WaveOut _waveOut;
         private readonly BufferedWaveProvider _buffer;
 
         public AudioPlayer()
@@ -18,7 +18,7 @@ namespace DMR_RADIO.Audio
             {
                 DiscardOnBufferOverflow = true
             };
-            _waveOut = new WaveOutEvent();
+            _waveOut = new WaveOut();
             _waveOut.Init(_buffer);
         }
 

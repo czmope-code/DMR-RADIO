@@ -1,8 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DMR_RADIO.Audio;
 using DMR_RADIO.Mvvm;
 using DMR_RADIO.Protocol;
 using DMR_RADIO.storage;
@@ -59,11 +61,17 @@ public sealed class MainViewModel : ObservableObject
     private double _volume = 70;
     private double _level;
     private bool _isReceiving;
+    private bool _isTransmitting;
     private string _callerCallsign = "";
     private string _callDetail = "";
     private int _slot = 1;
+    private int _selectedSlot = 1;
     private string _elapsedText = "00:00";
     private TgInfo _selectedTg;
+    private AudioPlayer? _audioPlayer;
+    private JitterBuffer? _jitterBuffer;
+    private CancellationTokenSource? _txCts;
+    private Task? _txTask;
 
     public MainViewModel()
     {
@@ -165,6 +173,7 @@ public sealed class MainViewModel : ObservableObject
 
             OnPropertyChanged(nameof(IsConnected));
             OnPropertyChanged(nameof(IsEditable));
+            OnPropertyChanged(nameof(CanTransmit));
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(ConnectButtonText));
             RefreshDisplay();
@@ -198,8 +207,26 @@ public sealed class MainViewModel : ObservableObject
             if (value is null || !Set(ref _selectedTg, value))
                 return;
 
+            StopTransmit();
+            EndCall();
             AddLog($"Vybrána {value.Label} ({value.Name}).");
             SaveSettings();
+        }
+    }
+
+    public int SelectedSlotIndex
+    {
+        get => _selectedSlot - 1;
+        set
+        {
+            var slot = value + 1;
+            if (slot is < 1 or > 2 || _selectedSlot == slot)
+                return;
+            _selectedSlot = slot;
+            OnPropertyChanged();
+            StopTransmit();
+            EndCall();
+            AddLog($"Vybrán timeslot {_selectedSlot}.");
         }
     }
 
@@ -208,8 +235,12 @@ public sealed class MainViewModel : ObservableObject
         get => _volume;
         set
         {
-            if (Set(ref _volume, value))
+            if (Set(ref _volume, Math.Clamp(value, 0, 100)))
+            {
+                if (_audioPlayer is not null)
+                    _audioPlayer.Volume = _volume;
                 OnPropertyChanged(nameof(VolumeText));
+            }
         }
     }
 
@@ -232,13 +263,24 @@ public sealed class MainViewModel : ObservableObject
         private set
         {
             if (Set(ref _isReceiving, value))
+            {
                 RefreshDisplay();
+                OnPropertyChanged(nameof(CanTransmit));
+            }
         }
     }
 
-    /// <summary>TX zatím není implementováno.</summary>
-    public bool IsTransmitting => false;
-    public bool CanTransmit => false;
+    public bool IsTransmitting
+    {
+        get => _isTransmitting;
+        private set
+        {
+            if (Set(ref _isTransmitting, value))
+                OnPropertyChanged(nameof(CanTransmit));
+        }
+    }
+
+    public bool CanTransmit => IsConnected && (!IsReceiving || IsTransmitting);
 
     public string ElapsedText
     {
@@ -337,6 +379,7 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task DisconnectAsync()
     {
+        await StopTransmitAsync();
         var client = _client;
         _client = null;
 
@@ -355,6 +398,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         _client = null;
+        StopTransmit();
         EndCall();
         State = LinkState.Disconnected;
         ErrorText = reason;
@@ -367,6 +411,7 @@ public sealed class MainViewModel : ObservableObject
     private void Shutdown()
     {
         SaveSettings();
+        StopTransmit();
 
         var client = _client;
         _client = null;
@@ -384,18 +429,29 @@ public sealed class MainViewModel : ObservableObject
 
     private void OnPacket(DmrdPacket p)
     {
+        if (p.Source.ToString() == DmrId || p.IsPrivate || p.Destination.ToString() != SelectedTg.Number ||
+            (p.Slot2 ? 2 : 1) != _selectedSlot)
+            return;
+
         // Zbytek hovoru, který už jsme ukončili terminátorem.
         if (p.StreamId == _lastEndedStream)
             return;
 
-        if (!_callActive)
+        if (!_callActive && p.FrameType is DmrFrameType.Voice or DmrFrameType.VoiceSync)
             BeginCall(p);
         else if (p.StreamId != _activeStream)
-            return; // souběžný hovor na druhém slotu – zatím ignorujeme
+            return;
+
+        if (!_callActive || p.StreamId != _activeStream)
+            return;
 
         _lastPacketTick = Environment.TickCount64;
 
-        // TODO: z p.Burst vytáhnout 3 × AMBE rámec a poslat do dekodéru.
+        if (p.FrameType is DmrFrameType.Voice or DmrFrameType.VoiceSync)
+        {
+            foreach (var frame in DmrVoiceBurstCodec.ExtractAmbeFrames(p.Burst))
+                _jitterBuffer?.AddFrame(frame);
+        }
 
         if (p.IsTerminator)
             EndCall();
@@ -418,12 +474,37 @@ public sealed class MainViewModel : ObservableObject
         _callTimer.Start();
 
         AddLog($"RX: {p.Source} → {(p.IsPrivate ? "privátně " : "TG ")}{p.Destination} (TS{_slot})");
+        try
+        {
+            _audioPlayer = new AudioPlayer { Volume = Volume };
+            _jitterBuffer = new JitterBuffer(new NullVocoder(), _audioPlayer)
+            {
+                TargetLatencyMs = 60
+            };
+            _jitterBuffer.LevelChanged += level => Post(() =>
+            {
+                if (_callActive)
+                    Level = level;
+            });
+            _jitterBuffer.Start();
+        }
+        catch (Exception ex)
+        {
+            _jitterBuffer?.Dispose();
+            _jitterBuffer = null;
+            _audioPlayer?.Dispose();
+            _audioPlayer = null;
+            AddLog($"Audio výstup není dostupný: {ex.Message}");
+        }
     }
 
     private void EndCall()
     {
         if (!_callActive)
+        {
+            StopAudio();
             return;
+        }
 
         _callActive = false;
         _callTimer.Stop();
@@ -435,7 +516,83 @@ public sealed class MainViewModel : ObservableObject
         Level = 0;
         ElapsedText = "00:00";
         IsReceiving = false;
+        StopAudio();
         AddLog($"Konec hovoru ({seconds:0.0} s).");
+    }
+
+    private void StopAudio()
+    {
+        var jitterBuffer = _jitterBuffer;
+        _jitterBuffer = null;
+        _audioPlayer = null;
+        if (jitterBuffer is not null)
+            jitterBuffer.Dispose();
+    }
+
+    public void StartTransmit()
+    {
+        var client = _client;
+        if (!CanTransmit || client is null || !uint.TryParse(SelectedTg.Number, out var destination))
+            return;
+
+        var cancellation = new CancellationTokenSource();
+        var manager = new TxManager(
+            client,
+            new NullVocoder(),
+            uint.Parse(DmrId),
+            destination,
+            uint.Parse(DmrId),
+            _selectedSlot == 2,
+            (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue),
+            message => Post(() => AddLog(message)));
+
+        _txCts = cancellation;
+        IsTransmitting = true;
+        AddLog($"TX: otevírám TG {destination} (TS{_selectedSlot}), bez audia.");
+        _txTask = RunTransmitAsync(manager, cancellation);
+    }
+
+    public void StopTransmit()
+    {
+        _txCts?.Cancel();
+    }
+
+    private async Task StopTransmitAsync()
+    {
+        StopTransmit();
+        if (_txTask is not null)
+        {
+            try { await _txTask.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch (Exception) { }
+        }
+    }
+
+    private async Task RunTransmitAsync(TxManager manager, CancellationTokenSource cancellation)
+    {
+        using (manager)
+        {
+            try
+            {
+                await manager.RunAsync(cancellation.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AddLog($"TX se nezdařilo: {ex.Message}");
+            }
+        }
+
+        cancellation.Dispose();
+        Post(() =>
+        {
+            if (ReferenceEquals(_txCts, cancellation))
+            {
+                _txCts = null;
+                _txTask = null;
+                IsTransmitting = false;
+                AddLog("TX ukončeno.");
+            }
+        });
     }
 
     private void OnCallTimerTick()

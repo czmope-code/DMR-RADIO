@@ -43,6 +43,22 @@ namespace DMR_RADIO
 
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
             => _vm.Password = ((PasswordBox)sender).Password;
+
+        private void PttButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_vm.CanTransmit)
+                return;
+            _vm.StartTransmit();
+            e.Handled = true;
+        }
+
+        private void PttButton_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _vm.StopTransmit();
+            e.Handled = true;
+        }
+
+        private void PttButton_LostMouseCapture(object sender, MouseEventArgs e)
+            => _vm.StopTransmit();
     }
 }
-

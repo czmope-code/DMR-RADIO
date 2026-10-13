@@ -582,7 +582,15 @@
 
                             <!-- talkgroupy -->
                             <StackPanel Grid.Column="1" Margin="30,0" VerticalAlignment="Center">
-                                <TextBlock Text="TALKGROUP" Style="{StaticResource FieldLabel}"/>
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="TALKGROUP" Style="{StaticResource FieldLabel}" Margin="0"/>
+                                    <ComboBox Width="75" Height="24" Margin="12,0,0,0"
+                                              SelectedIndex="{Binding SelectedSlotIndex, Mode=TwoWay}"
+                                              ToolTip="Přijímací a vysílací timeslot">
+                                        <ComboBoxItem Content="TS1"/>
+                                        <ComboBoxItem Content="TS2"/>
+                                    </ComboBox>
+                                </DockPanel>
                                 <ListBox ItemsSource="{Binding Favorites}"
                                          SelectedItem="{Binding SelectedTg, Mode=TwoWay}"
                                          ItemContainerStyle="{StaticResource TgItem}"
@@ -610,7 +618,10 @@
                             <!-- PTT -->
                             <Button Grid.Column="2" Style="{StaticResource PttButton}" Content="PTT"
                                     IsEnabled="{Binding CanTransmit}"
-                                    ToolTip="Vysílání (TX) zatím není implementováno"/>
+                                    PreviewMouseLeftButtonDown="PttButton_PreviewMouseLeftButtonDown"
+                                    PreviewMouseLeftButtonUp="PttButton_PreviewMouseLeftButtonUp"
+                                    LostMouseCapture="PttButton_LostMouseCapture"
+                                    ToolTip="Podržet pro otevření vybrané TG tichým vysíláním"/>
                         </Grid>
                     </Grid>
                 </Border>
