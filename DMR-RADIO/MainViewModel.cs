@@ -538,7 +538,10 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             _audioPlayer = new AudioPlayer(SelectedAudioOutputDevice.DeviceNumber) { Volume = Volume };
-            _jitterBuffer = new JitterBuffer(new NullVocoder(), _audioPlayer)
+            var vocoder = OpenDmrVocoder.CreateOrFallback(out var warning);
+            if (warning is not null)
+                AddLog($"RX zůstane tichý: {warning}. Nainstaluj libopendmr.dll vedle aplikace.");
+            _jitterBuffer = new JitterBuffer(vocoder, _audioPlayer)
             {
                 TargetLatencyMs = 60
             };
@@ -573,9 +576,12 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         var cancellation = new CancellationTokenSource();
+        var vocoder = OpenDmrVocoder.CreateOrFallback(out var warning);
+        if (warning is not null)
+            AddLog($"TX používá tichý NullVocoder: {warning}.");
         var manager = new TxManager(
             client,
-            new NullVocoder(),
+            vocoder,
             uint.Parse(DmrId),
             destination,
             uint.Parse(DmrId),
