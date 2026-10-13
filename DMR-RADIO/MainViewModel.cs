@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using DMR_RADIO.Mvvm;
 using DMR_RADIO.Protocol;
+using DMR_RADIO.storage;
 
 namespace DMR_RADIO.ViewModels;
 
@@ -72,8 +73,18 @@ public sealed class MainViewModel : ObservableObject
             new("92", "Evropa"),
             new("230", "Česká republika"),
             new("231", "Slovensko"),
+            new("27", "DMR"),
         };
         _selectedTg = Favorites[2];
+
+        // Uložené nastavení z minula (hodnoty se zapisují přímo do polí, aby se nespouštělo ukládání ani logování).
+        var saved = SettingsStore.Load();
+        _dmrId = saved.DmrId;
+        _server = saved.Server;
+        _port = string.IsNullOrWhiteSpace(saved.Port) ? "62031" : saved.Port;
+        _volume = Math.Clamp(saved.Volume, 0, 100);
+        _selectedTg = Favorites.FirstOrDefault(t => t.Number == saved.TalkGroup) ?? _selectedTg;
+        Password = saved.Password;
 
         MeterSegments = new ObservableCollection<MeterSegment>();
         for (var i = 0; i < SegmentCount; i++)
@@ -188,6 +199,7 @@ public sealed class MainViewModel : ObservableObject
                 return;
 
             AddLog($"Vybrána {value.Label} ({value.Name}).");
+            SaveSettings();
         }
     }
 
@@ -292,6 +304,7 @@ public sealed class MainViewModel : ObservableObject
 
         ErrorText = "";
         State = LinkState.Connecting;
+        SaveSettings(); // údaje se uloží hned, i kdyby se připojení nepovedlo
 
         var host = Server.Trim();
         var port = int.Parse(Port.Trim());
@@ -353,6 +366,8 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Volá se při ukončení aplikace.</summary>
     private void Shutdown()
     {
+        SaveSettings();
+
         var client = _client;
         _client = null;
         if (client is null)
@@ -464,6 +479,22 @@ public sealed class MainViewModel : ObservableObject
     }
 
     // ---- Pomocné ---------------------------------------------------------
+
+    private void SaveSettings()
+    {
+        var ok = SettingsStore.Save(new AppSettings
+        {
+            DmrId = DmrId.Trim(),
+            Server = Server.Trim(),
+            Port = Port.Trim(),
+            Password = Password,
+            TalkGroup = SelectedTg.Number,
+            Volume = Volume,
+        });
+
+        if (!ok)
+            AddLog("Nastavení se nepodařilo uložit.");
+    }
 
     private void Post(Action action) => _dispatcher.InvokeAsync(action);
 

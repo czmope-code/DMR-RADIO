@@ -7,7 +7,7 @@
         xmlns:vm="clr-namespace:DMR_RADIO.ViewModels"
         xmlns:conv="clr-namespace:DMR_RADIO.Converters"
         mc:Ignorable="d"
-        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+  
         Title="DMR Radio" Height="700" Width="1100"
         MinHeight="660" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
@@ -658,7 +658,7 @@
                             </Grid>
 
                             <TextBlock Text="HESLO HOTSPOTU" Style="{StaticResource FieldLabel}"/>
-                            <PasswordBox Style="{StaticResource FieldPassword}"
+                            <PasswordBox x:Name="PwBox" Style="{StaticResource FieldPassword}"
                                          PasswordChanged="PasswordBox_PasswordChanged"
                                          IsEnabled="{Binding IsEditable}"/>
                         </StackPanel>

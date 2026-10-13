@@ -17,6 +17,7 @@ namespace DMR_RADIO
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
+
     public partial class MainWindow : Window
     {
         private readonly MainViewModel _vm = new();
@@ -25,6 +26,9 @@ namespace DMR_RADIO
         {
             InitializeComponent();
             DataContext = _vm;
+
+            // PasswordBox nejde navázat bindingem, uložené heslo se do něj vloží ručně.
+            PwBox.Password = _vm.Password;
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
