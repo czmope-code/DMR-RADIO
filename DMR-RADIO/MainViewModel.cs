@@ -68,7 +68,7 @@ public sealed class MainViewModel : ObservableObject
     private int _selectedSlot = 1;
     private string _elapsedText = "00:00";
     private TgInfo _selectedTg;
-    private AudioOutputDevice _selectedAudioOutputDevice;
+    private DMR_RADIO.Audio.AudioOutputDevice _selectedAudioOutputDevice;
     private AudioPlayer? _audioPlayer;
     private JitterBuffer? _jitterBuffer;
     private CancellationTokenSource? _txCts;
@@ -85,7 +85,8 @@ public sealed class MainViewModel : ObservableObject
             new("27", "DMR"),
         };
         _selectedTg = Favorites[2];
-        AudioOutputDevices = new ObservableCollection<AudioOutputDevice>(AudioOutputDevice.Enumerate());
+        AudioOutputDevices = new ObservableCollection<DMR_RADIO.Audio.AudioOutputDevice>(
+            DMR_RADIO.Audio.AudioOutputDevice.Enumerate());
 
         // Uložené nastavení z minula (hodnoty se zapisují přímo do polí, aby se nespouštělo ukládání ani logování).
         var saved = SettingsStore.Load();
@@ -128,7 +129,7 @@ public sealed class MainViewModel : ObservableObject
     // ---- Kolekce ---------------------------------------------------------
 
     public ObservableCollection<TgInfo> Favorites { get; }
-    public ObservableCollection<AudioOutputDevice> AudioOutputDevices { get; }
+    public ObservableCollection<DMR_RADIO.Audio.AudioOutputDevice> AudioOutputDevices { get; }
     public ObservableCollection<MeterSegment> MeterSegments { get; }
     public ObservableCollection<string> LogLines { get; } = new();
 
@@ -237,7 +238,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public AudioOutputDevice SelectedAudioOutputDevice
+    public DMR_RADIO.Audio.AudioOutputDevice SelectedAudioOutputDevice
     {
         get => _selectedAudioOutputDevice;
         set
