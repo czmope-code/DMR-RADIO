@@ -41,4 +41,22 @@ public sealed class DmrdPacketTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => packet.ToBytes());
     }
+
+    [Fact]
+    public void BuildOptionsPacket_UsesRpToCommandAndAppendsAsciiOptions()
+    {
+        var packet = HomebrewClient.BuildOptionsPacket(1234567, "TS2=230");
+
+        Assert.Equal("RPTO", System.Text.Encoding.ASCII.GetString(packet, 0, 4));
+        Assert.Equal(new byte[] { 0, 0x12, 0xD6, 0x87 }, packet[4..8]);
+        Assert.Equal("TS2=230", System.Text.Encoding.ASCII.GetString(packet, 8, packet.Length - 8));
+    }
+
+    [Theory]
+    [InlineData("TS2=230\n")]
+    [InlineData("TS2=é")]
+    public void BuildOptionsPacket_RejectsNonPrintableAscii(string options)
+    {
+        Assert.Throws<ArgumentException>(() => HomebrewClient.BuildOptionsPacket(1234567, options));
+    }
 }

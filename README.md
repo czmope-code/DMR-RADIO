@@ -1,12 +1,14 @@
 # DMR Radio
 
-WPF klient pro Homebrew/MMDVM přes UDP. Přihlášení a uložení nastavení včetně DPAPI zůstávají beze změny.
+WPF klient pro Homebrew/MMDVM přes UDP, kompatibilní se servery FreeDMR. Přihlášení a uložení nastavení včetně DPAPI zůstávají beze změny.
+
+Po standardním Homebrew přihlášení (`RPTL`, výzva `RPTACK`, ověření `RPTK`, konfigurace `RPTC`) klient odešle seznam požadované TG příkazem `RPTO`, například `TS2=230`. Změna TG nebo timeslotu odešle aktualizovaný `RPTO`. Heslo je sdílené heslo Homebrew serveru a používá se při `RPTK`; není součástí `DMRD`.
 
 ## RX
 
-Aplikace přijímá pakety DMRD, vybírá pouze skupinový hovor pro zvolenou TG a timeslot a z 33bajtového burstu skládá tři 72bitové AMBE+2 kanálově kódované rámce. Rámce nejsou v burstu uloženy jako tři sousední devítibajtové bloky: jejich části A/B/C jsou prokládané a druhý rámec je rozdělen kolem 48bitového sync/embedded pole. Dekódování musí zpracovat i kanálové kódování, které z těchto 72 bitů obnovuje vlastní 49bitová hlasová data.
+Aplikace přijímá standardní 55bajtové pakety DMRD s 33bajtovým burstem, vybírá pouze skupinový hovor pro zvolenou TG a timeslot a z burstu skládá tři 72bitové AMBE+2 kanálově kódované rámce po 9 bajtech. Hlasová data proto nejsou prostých 27 souvislých bajtů za 12bajtovou hlavičkou: části A/B/C jsou v burstu prokládané a druhý rámec je rozdělen kolem 48bitového sync/embedded pole. `DmrVoiceBurstCodec` provádí jejich extrakci; jitter buffer předává dekodéru jeden rámec každých 20 ms s cílovým předstihem 60 ms.
 
-`IVocoder` je rozhraní pro dekodér a kodér. Aplikace potřebuje OpenDMR (`libopendmr.dll`) přes C API; bez něj použije `NullVocoder`, který vrací ticho pro RX a nulové rámce pro TX. Při hovoru se do logu zapíše, zda je OpenDMR aktivní, a případná chyba dekódování. Návod níže sestaví DLL pro Windows a projekt ji při dalším buildu automaticky zkopíruje vedle EXE. Se skutečným dekodérem se zvuk přehrává přes NAudio v 8 kHz mono s jitter bufferem přibližně 60 ms. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
+`IVocoder` je rozhraní pro dekodér a kodér. Aplikace potřebuje OpenDMR (`libopendmr.dll`) přes C API; bez něj použije `NullVocoder`, který vrací ticho pro RX a nulové rámce pro TX. Při hovoru se do logu zapíše, zda je OpenDMR aktivní, a případná chyba dekódování. Návod níže sestaví DLL pro Windows a projekt ji při dalším buildu automaticky zkopíruje vedle EXE. Zvuk se přehrává přes NAudio `WaveOut` jako 8 kHz mono PCM, což odpovídá výstupu dekodéru; `MediaFoundationResampler` se nepoužívá, protože tato pipeline nepoužívá `WasapiOut` ani nevyžaduje 48 kHz PCM vstup. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
 
 Výstupní reproduktor/sluchátka lze vybrat v seznamu **VÝSTUP ZVUKU** pod posuvníkem hlasitosti. Volba „Výchozí zařízení Windows“ použije aktuální výchozí zařízení. Výběr se uloží do nastavení; změna během hovoru restartuje lokální přehrávač.
 
