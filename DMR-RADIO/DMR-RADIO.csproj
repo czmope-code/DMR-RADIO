@@ -14,10 +14,14 @@
   </ItemGroup>
 
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Native\libopendmr.dll')">
-    <Content Include="$(MSBuildProjectDirectory)\Native\libopendmr.dll"
-             Link="libopendmr.dll"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildProjectDirectory)\Native\libopendmr.dll" Link="libopendmr.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="TYT-Vocoder-MD380-D13.20.bin">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
+    
