@@ -22,6 +22,9 @@
     <Compile Include="../DMR-RADIO/Audio/DmrVoiceBurstCodec.cs" Link="Audio/DmrVoiceBurstCodec.cs" />
     <Compile Include="../DMR-RADIO/Protocol/DmrLinkControl.cs" Link="Protocol/DmrLinkControl.cs" />
     <Compile Include="../DMR-RADIO/AppSettings.cs" Link="Storage/AppSettings.cs" />
+    <Compile Include="../DMR-RADIO/Audio/Audio_IVocoder_Version2.cs" Link="Audio/Audio_IVocoder_Version2.cs" />
+    <Compile Include="../DMR-RADIO/Audio/Audio_NullVocoder_Version2.cs" Link="Audio/Audio_NullVocoder_Version2.cs" />
+    <Compile Include="../DMR-RADIO/Audio/OpenDmrVocoder.cs" Link="Audio/OpenDmrVocoder.cs" />
   </ItemGroup>
 
 </Project>
