@@ -1,5 +1,9 @@
 namespace DMR_RADIO.Protocol;
 
+/// <summary>
+/// Sestavuje group-call LC data bursty podle rozložení ETSI TS 102 361-1:
+/// RS(12,9), BPTC(196,96), Golay slot type a 48bitový data sync.
+/// </summary>
 public static class DmrLinkControl
 {
     private static readonly byte[] DataSync = [0x0D, 0xFF, 0x57, 0xD7, 0x5D, 0xF5];
@@ -56,6 +60,7 @@ public static class DmrLinkControl
 
     private static byte[] EncodeBptc19696(ReadOnlySpan<byte> payload)
     {
+        // Devadesát šest vstupních bitů tvoří systémovou část matice 13 × 15.
         var matrix = new bool[196];
         var payloadBit = 0;
         for (var column = 4; column <= 11; column++)

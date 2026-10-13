@@ -1,5 +1,9 @@
 namespace DMR_RADIO.Audio;
 
+/// <summary>
+/// Mapuje tři 72bitové AMBE kanálové rámce mezi DMR burstem a vokodérem;
+/// prostřední 48bitové pole obsahuje sync nebo embedded signalling.
+/// </summary>
 public static class DmrVoiceBurstCodec
 {
     private const int BurstLength = 33;

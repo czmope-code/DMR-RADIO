@@ -38,8 +38,14 @@ public readonly record struct DmrdPacket(
 
     public byte[] ToBytes()
     {
-        if (Source > 0xFFFFFF || Destination > 0xFFFFFF)
+        if (Source > 0xFFFFFF)
             throw new ArgumentOutOfRangeException(nameof(Source), "DMR ID musí mít nejvýše 24 bitů.");
+        if (Destination > 0xFFFFFF)
+            throw new ArgumentOutOfRangeException(nameof(Destination), "DMR ID musí mít nejvýše 24 bitů.");
+        if ((byte)FrameType > 3)
+            throw new ArgumentOutOfRangeException(nameof(FrameType));
+        if (DataType > 0x0F)
+            throw new ArgumentOutOfRangeException(nameof(DataType));
         if (Burst is null || Burst.Length != 33)
             throw new ArgumentException("DMRD burst musí mít přesně 33 bajtů.", nameof(Burst));
 

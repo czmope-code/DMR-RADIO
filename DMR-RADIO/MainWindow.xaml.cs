@@ -49,12 +49,15 @@ namespace DMR_RADIO
             if (!_vm.CanTransmit)
                 return;
             _vm.StartTransmit();
+            ((Button)sender).CaptureMouse();
             e.Handled = true;
         }
 
         private void PttButton_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             _vm.StopTransmit();
+            if (((Button)sender).IsMouseCaptured)
+                ((Button)sender).ReleaseMouseCapture();
             e.Handled = true;
         }
 

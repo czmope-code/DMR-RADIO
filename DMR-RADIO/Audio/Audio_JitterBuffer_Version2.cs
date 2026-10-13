@@ -37,9 +37,10 @@ namespace DMR_RADIO.Audio
         {
             if (!_started)
                 return;
+            _started = false;
             _cts.Cancel();
             try { _consumer?.Wait(500); } catch { }
-            _player.Stop();
+            try { _player.Stop(); } catch { }
             _player.ClearBuffer();
             while (_queue.TryTake(out _)) { }
         }
@@ -108,6 +109,7 @@ namespace DMR_RADIO.Audio
             _cts.Dispose();
             _queue.Dispose();
             _vocoder.Dispose();
+            _player.Dispose();
         }
     }
 }

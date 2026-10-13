@@ -48,10 +48,11 @@ public sealed class TxManager : IDisposable
                 for (var frame = 0; frame < ambe.Length; frame++)
                     ambe[frame] = _vocoder.Encode(silence);
 
-                var voiceSync = _burstIndex++ % 6 == 0;
+                var burstSequence = (byte)(_burstIndex++ % 6);
+                var voiceSync = burstSequence == 0;
                 await SendAsync(
                     voiceSync ? DmrFrameType.VoiceSync : DmrFrameType.Voice,
-                    0,
+                    burstSequence,
                     DmrVoiceBurstCodec.CreateVoiceBurst(ambe, voiceSync),
                     cancellationToken).ConfigureAwait(false);
             }

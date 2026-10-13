@@ -412,6 +412,7 @@ public sealed class MainViewModel : ObservableObject
     {
         SaveSettings();
         StopTransmit();
+        EndCall();
 
         var client = _client;
         _client = null;
@@ -429,7 +430,8 @@ public sealed class MainViewModel : ObservableObject
 
     private void OnPacket(DmrdPacket p)
     {
-        if (p.Source.ToString() == DmrId || p.IsPrivate || p.Destination.ToString() != SelectedTg.Number ||
+        if ((uint.TryParse(DmrId, out var ownId) && p.Source == ownId) ||
+            p.IsPrivate || p.Destination.ToString() != SelectedTg.Number ||
             (p.Slot2 ? 2 : 1) != _selectedSlot)
             return;
 
@@ -490,9 +492,16 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            _jitterBuffer?.Dispose();
+            var jitterBuffer = _jitterBuffer;
             _jitterBuffer = null;
-            _audioPlayer?.Dispose();
+            try
+            {
+                if (jitterBuffer is not null)
+                    jitterBuffer.Dispose();
+                else
+                    _audioPlayer?.Dispose();
+            }
+            catch { }
             _audioPlayer = null;
             AddLog($"Audio výstup není dostupný: {ex.Message}");
         }
@@ -526,7 +535,10 @@ public sealed class MainViewModel : ObservableObject
         _jitterBuffer = null;
         _audioPlayer = null;
         if (jitterBuffer is not null)
-            jitterBuffer.Dispose();
+        {
+            try { jitterBuffer.Dispose(); }
+            catch (Exception ex) { AddLog($"Audio se nepodařilo korektně uvolnit: {ex.Message}"); }
+        }
     }
 
     public void StartTransmit()
@@ -554,7 +566,8 @@ public sealed class MainViewModel : ObservableObject
 
     public void StopTransmit()
     {
-        _txCts?.Cancel();
+        try { _txCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
     }
 
     private async Task StopTransmitAsync()
