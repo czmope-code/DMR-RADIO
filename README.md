@@ -6,7 +6,9 @@ WPF klient pro Homebrew/MMDVM přes UDP. Přihlášení a uložení nastavení v
 
 Aplikace přijímá pakety DMRD, vybírá pouze skupinový hovor pro zvolenou TG a timeslot a z 33bajtového burstu skládá tři 72bitové AMBE+2 kanálově kódované rámce. Rámce nejsou v burstu uloženy jako tři sousední devítibajtové bloky: jejich části A/B/C jsou prokládané a druhý rámec je rozdělen kolem 48bitového sync/embedded pole. Dekódování musí zpracovat i kanálové kódování, které z těchto 72 bitů obnovuje vlastní 49bitová hlasová data.
 
-`IVocoder` je rozhraní pro dekodér a kodér. Výchozí `NullVocoder` vrací ticho pro RX a nulové rámce pro TX; **není to skutečný AMBE+2 vokodér**. Zvuk se přehrává přes NAudio v 8 kHz mono s jitter bufferem přibližně 60 ms. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
+`IVocoder` je rozhraní pro dekodér a kodér. Výchozí `NullVocoder` vrací ticho pro RX a nulové rámce pro TX; **není to skutečný AMBE+2 vokodér**. Proto aplikace v současné podobě rozpozná a zpracuje příchozí pakety, ale z reproduktoru neuslyšíš hlas ani při správně zvoleném výstupu. Po připojení reálného dekodéru se zvuk přehrává přes NAudio v 8 kHz mono s jitter bufferem přibližně 60 ms. Posuvník hlasitosti ovládá výstup a VU metr počítá RMS z dekódovaného PCM. Hovor končí terminátorem nebo po 800 ms bez paketů; při změně TG/timeslotu či odpojení se přehrávání a buffer uvolní.
+
+Výstupní reproduktor/sluchátka lze vybrat v seznamu **VÝSTUP ZVUKU** pod posuvníkem hlasitosti. Volba „Výchozí zařízení Windows“ použije aktuální výchozí zařízení. Výběr se uloží do nastavení; změna během hovoru restartuje lokální přehrávač.
 
 ### Skutečný AMBE+2 vokodér
 

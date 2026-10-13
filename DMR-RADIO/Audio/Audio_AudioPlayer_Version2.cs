@@ -11,14 +11,14 @@ namespace DMR_RADIO.Audio
         private readonly WaveOut _waveOut;
         private readonly BufferedWaveProvider _buffer;
 
-        public AudioPlayer()
+        public AudioPlayer(int deviceNumber = -1)
         {
             var wf = new WaveFormat(8000, 16, 1); // 8 kHz, 16-bit, mono
             _buffer = new BufferedWaveProvider(wf, TimeSpan.FromSeconds(5))
             {
                 DiscardOnBufferOverflow = true
             };
-            _waveOut = new WaveOut();
+            _waveOut = new WaveOut { DeviceNumber = deviceNumber };
             _waveOut.Init(_buffer);
         }
 

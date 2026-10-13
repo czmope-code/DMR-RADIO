@@ -68,6 +68,7 @@ public sealed class MainViewModel : ObservableObject
     private int _selectedSlot = 1;
     private string _elapsedText = "00:00";
     private TgInfo _selectedTg;
+    private AudioOutputDevice _selectedAudioOutputDevice;
     private AudioPlayer? _audioPlayer;
     private JitterBuffer? _jitterBuffer;
     private CancellationTokenSource? _txCts;
@@ -84,6 +85,7 @@ public sealed class MainViewModel : ObservableObject
             new("27", "DMR"),
         };
         _selectedTg = Favorites[2];
+        AudioOutputDevices = new ObservableCollection<AudioOutputDevice>(AudioOutputDevice.Enumerate());
 
         // Uložené nastavení z minula (hodnoty se zapisují přímo do polí, aby se nespouštělo ukládání ani logování).
         var saved = SettingsStore.Load();
@@ -92,6 +94,8 @@ public sealed class MainViewModel : ObservableObject
         _port = string.IsNullOrWhiteSpace(saved.Port) ? "62031" : saved.Port;
         _volume = Math.Clamp(saved.Volume, 0, 100);
         _selectedTg = Favorites.FirstOrDefault(t => t.Number == saved.TalkGroup) ?? _selectedTg;
+        _selectedAudioOutputDevice = AudioOutputDevices.FirstOrDefault(
+            device => device.DeviceNumber == saved.AudioOutputDeviceNumber) ?? AudioOutputDevices[0];
         Password = saved.Password;
 
         MeterSegments = new ObservableCollection<MeterSegment>();
@@ -124,6 +128,7 @@ public sealed class MainViewModel : ObservableObject
     // ---- Kolekce ---------------------------------------------------------
 
     public ObservableCollection<TgInfo> Favorites { get; }
+    public ObservableCollection<AudioOutputDevice> AudioOutputDevices { get; }
     public ObservableCollection<MeterSegment> MeterSegments { get; }
     public ObservableCollection<string> LogLines { get; } = new();
 
@@ -227,6 +232,20 @@ public sealed class MainViewModel : ObservableObject
             StopTransmit();
             EndCall();
             AddLog($"Vybrán timeslot {_selectedSlot}.");
+        }
+    }
+
+    public AudioOutputDevice SelectedAudioOutputDevice
+    {
+        get => _selectedAudioOutputDevice;
+        set
+        {
+            if (value is null || !Set(ref _selectedAudioOutputDevice, value))
+                return;
+            SaveSettings();
+            AddLog($"Zvukový výstup: {value.Name}.");
+            if (_callActive)
+                StartAudio();
         }
     }
 
@@ -476,35 +495,7 @@ public sealed class MainViewModel : ObservableObject
         _callTimer.Start();
 
         AddLog($"RX: {p.Source} → {(p.IsPrivate ? "privátně " : "TG ")}{p.Destination} (TS{_slot})");
-        try
-        {
-            _audioPlayer = new AudioPlayer { Volume = Volume };
-            _jitterBuffer = new JitterBuffer(new NullVocoder(), _audioPlayer)
-            {
-                TargetLatencyMs = 60
-            };
-            _jitterBuffer.LevelChanged += level => Post(() =>
-            {
-                if (_callActive)
-                    Level = level;
-            });
-            _jitterBuffer.Start();
-        }
-        catch (Exception ex)
-        {
-            var jitterBuffer = _jitterBuffer;
-            _jitterBuffer = null;
-            try
-            {
-                if (jitterBuffer is not null)
-                    jitterBuffer.Dispose();
-                else
-                    _audioPlayer?.Dispose();
-            }
-            catch { }
-            _audioPlayer = null;
-            AddLog($"Audio výstup není dostupný: {ex.Message}");
-        }
+        StartAudio();
     }
 
     private void EndCall()
@@ -538,6 +529,40 @@ public sealed class MainViewModel : ObservableObject
         {
             try { jitterBuffer.Dispose(); }
             catch (Exception ex) { AddLog($"Audio se nepodařilo korektně uvolnit: {ex.Message}"); }
+        }
+    }
+
+    private void StartAudio()
+    {
+        StopAudio();
+        try
+        {
+            _audioPlayer = new AudioPlayer(SelectedAudioOutputDevice.DeviceNumber) { Volume = Volume };
+            _jitterBuffer = new JitterBuffer(new NullVocoder(), _audioPlayer)
+            {
+                TargetLatencyMs = 60
+            };
+            _jitterBuffer.LevelChanged += level => Post(() =>
+            {
+                if (_callActive)
+                    Level = level;
+            });
+            _jitterBuffer.Start();
+        }
+        catch (Exception ex)
+        {
+            var jitterBuffer = _jitterBuffer;
+            _jitterBuffer = null;
+            try
+            {
+                if (jitterBuffer is not null)
+                    jitterBuffer.Dispose();
+                else
+                    _audioPlayer?.Dispose();
+            }
+            catch { }
+            _audioPlayer = null;
+            AddLog($"Zvukový výstup „{SelectedAudioOutputDevice.Name}“ není dostupný: {ex.Message}");
         }
     }
 
@@ -660,6 +685,7 @@ public sealed class MainViewModel : ObservableObject
             Password = Password,
             TalkGroup = SelectedTg.Number,
             Volume = Volume,
+            AudioOutputDeviceNumber = SelectedAudioOutputDevice.DeviceNumber,
         });
 
         if (!ok)
