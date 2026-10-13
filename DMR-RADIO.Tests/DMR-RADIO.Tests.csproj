@@ -21,6 +21,7 @@
     <Compile Include="../DMR-RADIO/Homebrewclient.cs" Link="Protocol/Homebrewclient.cs" />
     <Compile Include="../DMR-RADIO/Audio/DmrVoiceBurstCodec.cs" Link="Audio/DmrVoiceBurstCodec.cs" />
     <Compile Include="../DMR-RADIO/Protocol/DmrLinkControl.cs" Link="Protocol/DmrLinkControl.cs" />
+    <Compile Include="../DMR-RADIO/AppSettings.cs" Link="Storage/AppSettings.cs" />
   </ItemGroup>
 
 </Project>
