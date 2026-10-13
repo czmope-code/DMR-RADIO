@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace DmrRadio.Audio
+namespace DMR_RADIO.Audio
 {
     /// <summary>
     /// Very small jitter buffer: accept incoming raw 9-byte AMBE frames and decode+play via IVocoder+AudioPlayer.
@@ -11,12 +9,14 @@ namespace DmrRadio.Audio
     /// </summary>
     public class JitterBuffer : IDisposable
     {
-        private readonly BlockingCollection<byte[]> _queue = new BlockingCollection<byte[]>(new ConcurrentQueue<byte[]>());
+        private readonly BlockingCollection<byte[]> _queue = new(new ConcurrentQueue<byte[]>(), 30);
         private readonly IVocoder _vocoder;
         private readonly AudioPlayer _player;
-        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-        private Task _consumer;
+        private readonly CancellationTokenSource _cts = new();
+        private Task? _consumer;
+        private bool _started;
         public int TargetLatencyMs { get; set; } = 60;
+        public event Action<double>? LevelChanged;
 
         public JitterBuffer(IVocoder vocoder, AudioPlayer player)
         {
@@ -26,16 +26,22 @@ namespace DmrRadio.Audio
 
         public void Start()
         {
+            if (_started)
+                return;
+            _started = true;
             _player.Start();
-            _consumer = Task.Run(ConsumeLoop, _cts.Token);
+            _consumer = Task.Run(ConsumeLoop);
         }
 
         public void Stop()
         {
+            if (!_started)
+                return;
             _cts.Cancel();
-            _queue.CompleteAdding();
             try { _consumer?.Wait(500); } catch { }
             _player.Stop();
+            _player.ClearBuffer();
+            while (_queue.TryTake(out _)) { }
         }
 
         /// <summary>
@@ -46,7 +52,8 @@ namespace DmrRadio.Audio
             if (ambe9 == null) return;
             if (ambe9.Length != 9) return;
             // Best-effort enqueue, drop if full
-            _queue.TryAdd(ambe9);
+            if (_started && !_queue.IsAddingCompleted)
+                _queue.TryAdd(ambe9.ToArray());
         }
 
         private async Task ConsumeLoop()
@@ -54,37 +61,52 @@ namespace DmrRadio.Audio
             var token = _cts.Token;
             try
             {
+                var startFrames = Math.Max(1, TargetLatencyMs / 20);
+                while (_queue.Count < startFrames && !token.IsCancellationRequested)
+                    await Task.Delay(5, token).ConfigureAwait(false);
+
                 while (!token.IsCancellationRequested)
                 {
-                    if (_queue.TryTake(out var ambe, 200))
+                    if (_queue.TryTake(out var ambe))
                     {
                         try
                         {
                             var pcm = _vocoder.Decode(ambe);
+                            if (pcm.Length != 160)
+                                pcm = new short[160];
                             _player.AddPcm(pcm);
+                            LevelChanged?.Invoke(GetLevel(pcm));
                         }
                         catch
                         {
-                            // on decode errors, add silence
-                            _player.AddPcm(new short[160]);
+                            var silence = new short[160];
+                            _player.AddPcm(silence);
+                            LevelChanged?.Invoke(0);
                         }
                     }
                     else
                     {
-                        // underflow -> small silence
-                        _player.AddPcm(new short[160]);
+                        LevelChanged?.Invoke(0);
                     }
-                    // wait a bit to match real-time pacing (~20ms per frame)
                     await Task.Delay(20, token).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) { }
         }
 
+        private static double GetLevel(short[] pcm)
+        {
+            double sum = 0;
+            foreach (var sample in pcm)
+                sum += (double)sample * sample;
+            return Math.Sqrt(sum / pcm.Length) / short.MaxValue;
+        }
+
         public void Dispose()
         {
             Stop();
             _cts.Dispose();
+            _queue.Dispose();
             _vocoder.Dispose();
         }
     }

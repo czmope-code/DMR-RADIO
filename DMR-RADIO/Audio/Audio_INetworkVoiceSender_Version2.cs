@@ -1,4 +1,4 @@
-namespace DmrRadio.Audio
+namespace DMR_RADIO.Audio
 {
     /// <summary>
     /// Abstraction you must implement to send fully formed DMR voice bursts over existing network code.

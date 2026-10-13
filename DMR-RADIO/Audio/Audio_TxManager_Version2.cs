@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DmrRadio.Audio
+namespace DMR_RADIO.Audio
 {
     /// <summary>
     /// Simple TX manager that, while PTT is down, takes PCM->AMBE frames from the IVocoder,

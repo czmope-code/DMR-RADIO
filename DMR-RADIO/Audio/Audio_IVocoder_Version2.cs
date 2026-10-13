@@ -1,4 +1,4 @@
-namespace DmrRadio.Audio
+namespace DMR_RADIO.Audio
 {
     public interface IVocoder : IDisposable
     {

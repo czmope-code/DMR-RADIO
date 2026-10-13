@@ -32,9 +32,35 @@ public readonly record struct DmrdPacket(
     byte Ber,
     byte Rssi)
 {
-    public const int MinLength = 53;
+    public const int MinLength = 55;
 
     public bool IsTerminator => FrameType == DmrFrameType.DataSync && DataType == 2;
+
+    public byte[] ToBytes()
+    {
+        if (Source > 0xFFFFFF || Destination > 0xFFFFFF)
+            throw new ArgumentOutOfRangeException(nameof(Source), "DMR ID musí mít nejvýše 24 bitů.");
+        if (Burst is null || Burst.Length != 33)
+            throw new ArgumentException("DMRD burst musí mít přesně 33 bajtů.", nameof(Burst));
+
+        var data = new byte[MinLength];
+        "DMRD"u8.CopyTo(data);
+        data[4] = Sequence;
+        data[5] = (byte)(Source >> 16);
+        data[6] = (byte)(Source >> 8);
+        data[7] = (byte)Source;
+        data[8] = (byte)(Destination >> 16);
+        data[9] = (byte)(Destination >> 8);
+        data[10] = (byte)Destination;
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(11, 4), RepeaterId);
+        data[15] = (byte)((Slot2 ? 0x80 : 0) | (IsPrivate ? 0x40 : 0) |
+                          ((byte)FrameType << 4) | (DataType & 0x0F));
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(16, 4), StreamId);
+        Burst.CopyTo(data, 20);
+        data[53] = Ber;
+        data[54] = Rssi;
+        return data;
+    }
 
     public static bool TryParse(ReadOnlySpan<byte> d, out DmrdPacket packet)
     {
@@ -132,6 +158,7 @@ public sealed class HomebrewClient : IAsyncDisposable
         {
             addresses = await Dns.GetHostAddressesAsync(_opt.Host, ct).ConfigureAwait(false);
         }
+
         catch (SocketException)
         {
             WriteLog($"Chyba DNS: Server „{_opt.Host}“ se nepodařilo najít.");
@@ -175,6 +202,13 @@ public sealed class HomebrewClient : IAsyncDisposable
 
         _pingTask = Task.Run(() => PingLoopAsync(_cts.Token));
         WriteLog("Autentizace a handshake kompletní. Klient je plně připojen.");
+    }
+
+    public Task SendDmrdAsync(DmrdPacket packet, CancellationToken ct = default)
+    {
+        if (_stage != Stage.Connected)
+            throw new InvalidOperationException("DMRD lze odesílat pouze při připojení.");
+        return SendAsync(packet.ToBytes(), ct);
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)

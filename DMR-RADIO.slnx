@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="DMR-RADIO/DMR-RADIO.csproj" />
+  <Project Path="DMR-RADIO.Tests/DMR-RADIO.Tests.csproj" />
 </Solution>

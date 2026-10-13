@@ -1,6 +1,6 @@
 using System;
 
-namespace DmrRadio.Audio
+namespace DMR_RADIO.Audio
 {
     /// <summary>
     /// A safe fallback vocoder for testing: Decode -> silence, Encode -> zero bytes.
