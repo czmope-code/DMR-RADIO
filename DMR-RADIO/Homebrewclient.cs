@@ -32,9 +32,41 @@ public readonly record struct DmrdPacket(
     byte Ber,
     byte Rssi)
 {
-    public const int MinLength = 53;
+    public const int MinLength = 55;
 
     public bool IsTerminator => FrameType == DmrFrameType.DataSync && DataType == 2;
+
+    public byte[] ToBytes()
+    {
+        if (Source > 0xFFFFFF)
+            throw new ArgumentOutOfRangeException(nameof(Source), "DMR ID musí mít nejvýše 24 bitů.");
+        if (Destination > 0xFFFFFF)
+            throw new ArgumentOutOfRangeException(nameof(Destination), "DMR ID musí mít nejvýše 24 bitů.");
+        if ((byte)FrameType > 3)
+            throw new ArgumentOutOfRangeException(nameof(FrameType));
+        if (DataType > 0x0F)
+            throw new ArgumentOutOfRangeException(nameof(DataType));
+        if (Burst is null || Burst.Length != 33)
+            throw new ArgumentException("DMRD burst musí mít přesně 33 bajtů.", nameof(Burst));
+
+        var data = new byte[MinLength];
+        "DMRD"u8.CopyTo(data);
+        data[4] = Sequence;
+        data[5] = (byte)(Source >> 16);
+        data[6] = (byte)(Source >> 8);
+        data[7] = (byte)Source;
+        data[8] = (byte)(Destination >> 16);
+        data[9] = (byte)(Destination >> 8);
+        data[10] = (byte)Destination;
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(11, 4), RepeaterId);
+        data[15] = (byte)((Slot2 ? 0x80 : 0) | (IsPrivate ? 0x40 : 0) |
+                          ((byte)FrameType << 4) | (DataType & 0x0F));
+        BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(16, 4), StreamId);
+        Burst.CopyTo(data, 20);
+        data[53] = Ber;
+        data[54] = Rssi;
+        return data;
+    }
 
     public static bool TryParse(ReadOnlySpan<byte> d, out DmrdPacket packet)
     {
@@ -64,6 +96,7 @@ public readonly record struct DmrdPacket(
 public sealed record HomebrewOptions(uint RadioId, string Host, int Port, string Password)
 {
     public string Callsign { get; init; } = "";
+    public string OptionsString { get; init; } = "";
     public uint RxFrequencyHz { get; init; } = 439000000;
     public uint TxFrequencyHz { get; init; } = 439000000;
     public int TxPower { get; init; } = 1;
@@ -132,6 +165,7 @@ public sealed class HomebrewClient : IAsyncDisposable
         {
             addresses = await Dns.GetHostAddressesAsync(_opt.Host, ct).ConfigureAwait(false);
         }
+
         catch (SocketException)
         {
             WriteLog($"Chyba DNS: Server „{_opt.Host}“ se nepodařilo najít.");
@@ -175,6 +209,13 @@ public sealed class HomebrewClient : IAsyncDisposable
 
         _pingTask = Task.Run(() => PingLoopAsync(_cts.Token));
         WriteLog("Autentizace a handshake kompletní. Klient je plně připojen.");
+    }
+
+    public Task SendDmrdAsync(DmrdPacket packet, CancellationToken ct = default)
+    {
+        if (_stage != Stage.Connected)
+            throw new InvalidOperationException("DMRD lze odesílat pouze při připojení.");
+        return SendAsync(packet.ToBytes(), ct);
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -281,6 +322,8 @@ public sealed class HomebrewClient : IAsyncDisposable
             case Stage.Config:
                 _stage = Stage.Connected;
                 WriteLog("Konfigurace schválena serverem. Navázáno stabilní spojení!");
+                if (!string.IsNullOrWhiteSpace(_opt.OptionsString))
+                    await SendOptionsAsync(_opt.OptionsString, ct).ConfigureAwait(false);
                 _loginDone.TrySetResult();
                 break;
         }
@@ -334,6 +377,31 @@ public sealed class HomebrewClient : IAsyncDisposable
             default:
                 return Task.CompletedTask;
         }
+    }
+
+    /// <summary>Pošle FreeDMR/Homebrew seznam požadovaných talkgroupů zprávou RPTO.</summary>
+    public Task SendOptionsAsync(string options, CancellationToken ct = default)
+    {
+        if (_stage != Stage.Connected)
+            throw new InvalidOperationException("RPTO lze odesílat pouze po připojení.");
+
+        WriteLog("Odesílám RPTO s nastavením požadovaných talkgroupů.");
+        return SendAsync(BuildOptionsPacket(_opt.RadioId, options), ct);
+    }
+
+    /// <summary>Sestaví RPTO paket pro otestovatelné kódování options stringu.</summary>
+    public static byte[] BuildOptionsPacket(uint radioId, string options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Length > 1024 || options.Any(c => c > 0x7F || char.IsControl(c)))
+            throw new ArgumentException("Options string musí být nejvýše 1024 tisknutelných ASCII znaků.", nameof(options));
+
+        var optionBytes = Encoding.ASCII.GetBytes(options);
+        var packet = new byte[8 + optionBytes.Length];
+        "RPTO"u8.CopyTo(packet);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), radioId);
+        optionBytes.CopyTo(packet, 8);
+        return packet;
     }
 
     private async Task SendAsync(byte[] data, CancellationToken ct)

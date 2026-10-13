@@ -16,6 +16,7 @@ public sealed class AppSettings
     public string Port { get; set; } = "62031";
     public string TalkGroup { get; set; } = "230";
     public double Volume { get; set; } = 70;
+    public int AudioOutputDeviceNumber { get; set; } = -1;
 
     /// <summary>Heslo v paměti (do souboru se nikdy nezapisuje čitelně).</summary>
     [JsonIgnore]

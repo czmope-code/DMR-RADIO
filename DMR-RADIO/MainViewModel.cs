@@ -1,8 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DMR_RADIO.Audio;
 using DMR_RADIO.Mvvm;
 using DMR_RADIO.Protocol;
 using DMR_RADIO.storage;
@@ -59,11 +61,18 @@ public sealed class MainViewModel : ObservableObject
     private double _volume = 70;
     private double _level;
     private bool _isReceiving;
+    private bool _isTransmitting;
     private string _callerCallsign = "";
     private string _callDetail = "";
     private int _slot = 1;
+    private int _selectedSlot = 1;
     private string _elapsedText = "00:00";
     private TgInfo _selectedTg;
+    private AudioOutputDevice _selectedAudioOutputDevice;
+    private AudioPlayer? _audioPlayer;
+    private JitterBuffer? _jitterBuffer;
+    private CancellationTokenSource? _txCts;
+    private Task? _txTask;
 
     public MainViewModel()
     {
@@ -76,6 +85,7 @@ public sealed class MainViewModel : ObservableObject
             new("27", "DMR"),
         };
         _selectedTg = Favorites[2];
+        AudioOutputDevices = new ObservableCollection<AudioOutputDevice>(AudioOutputDevice.Enumerate());
 
         // Uložené nastavení z minula (hodnoty se zapisují přímo do polí, aby se nespouštělo ukládání ani logování).
         var saved = SettingsStore.Load();
@@ -84,6 +94,8 @@ public sealed class MainViewModel : ObservableObject
         _port = string.IsNullOrWhiteSpace(saved.Port) ? "62031" : saved.Port;
         _volume = Math.Clamp(saved.Volume, 0, 100);
         _selectedTg = Favorites.FirstOrDefault(t => t.Number == saved.TalkGroup) ?? _selectedTg;
+        _selectedAudioOutputDevice = AudioOutputDevices.FirstOrDefault(
+            device => device.DeviceNumber == saved.AudioOutputDeviceNumber) ?? AudioOutputDevices[0];
         Password = saved.Password;
 
         MeterSegments = new ObservableCollection<MeterSegment>();
@@ -116,6 +128,7 @@ public sealed class MainViewModel : ObservableObject
     // ---- Kolekce ---------------------------------------------------------
 
     public ObservableCollection<TgInfo> Favorites { get; }
+    public ObservableCollection<AudioOutputDevice> AudioOutputDevices { get; }
     public ObservableCollection<MeterSegment> MeterSegments { get; }
     public ObservableCollection<string> LogLines { get; } = new();
 
@@ -144,7 +157,7 @@ public sealed class MainViewModel : ObservableObject
         set => Set(ref _port, value);
     }
 
-    /// <summary>Heslo hotspotu (BrandMeister SelfCare). Nastavuje se z PasswordBoxu.</summary>
+    /// <summary>Sdílené heslo Homebrew serveru. Nastavuje se z PasswordBoxu.</summary>
     public string Password { get; set; } = "";
 
     public string ErrorText
@@ -165,6 +178,7 @@ public sealed class MainViewModel : ObservableObject
 
             OnPropertyChanged(nameof(IsConnected));
             OnPropertyChanged(nameof(IsEditable));
+            OnPropertyChanged(nameof(CanTransmit));
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(ConnectButtonText));
             RefreshDisplay();
@@ -198,8 +212,42 @@ public sealed class MainViewModel : ObservableObject
             if (value is null || !Set(ref _selectedTg, value))
                 return;
 
+            StopTransmit();
+            EndCall();
             AddLog($"Vybrána {value.Label} ({value.Name}).");
+            _ = UpdateServerOptionsAsync();
             SaveSettings();
+        }
+    }
+
+    public int SelectedSlotIndex
+    {
+        get => _selectedSlot - 1;
+        set
+        {
+            var slot = value + 1;
+            if (slot is < 1 or > 2 || _selectedSlot == slot)
+                return;
+            _selectedSlot = slot;
+            OnPropertyChanged();
+            StopTransmit();
+            EndCall();
+            AddLog($"Vybrán timeslot {_selectedSlot}.");
+            _ = UpdateServerOptionsAsync();
+        }
+    }
+
+    public AudioOutputDevice SelectedAudioOutputDevice
+    {
+        get => _selectedAudioOutputDevice;
+        set
+        {
+            if (value is null || !Set(ref _selectedAudioOutputDevice, value))
+                return;
+            SaveSettings();
+            AddLog($"Zvukový výstup: {value.Name}.");
+            if (_callActive)
+                StartAudio();
         }
     }
 
@@ -208,8 +256,12 @@ public sealed class MainViewModel : ObservableObject
         get => _volume;
         set
         {
-            if (Set(ref _volume, value))
+            if (Set(ref _volume, Math.Clamp(value, 0, 100)))
+            {
+                if (_audioPlayer is not null)
+                    _audioPlayer.Volume = _volume;
                 OnPropertyChanged(nameof(VolumeText));
+            }
         }
     }
 
@@ -232,13 +284,24 @@ public sealed class MainViewModel : ObservableObject
         private set
         {
             if (Set(ref _isReceiving, value))
+            {
                 RefreshDisplay();
+                OnPropertyChanged(nameof(CanTransmit));
+            }
         }
     }
 
-    /// <summary>TX zatím není implementováno.</summary>
-    public bool IsTransmitting => false;
-    public bool CanTransmit => false;
+    public bool IsTransmitting
+    {
+        get => _isTransmitting;
+        private set
+        {
+            if (Set(ref _isTransmitting, value))
+                OnPropertyChanged(nameof(CanTransmit));
+        }
+    }
+
+    public bool CanTransmit => IsConnected && (!IsReceiving || IsTransmitting);
 
     public string ElapsedText
     {
@@ -308,7 +371,10 @@ public sealed class MainViewModel : ObservableObject
 
         var host = Server.Trim();
         var port = int.Parse(Port.Trim());
-        var options = new HomebrewOptions(uint.Parse(DmrId.Trim()), host, port, Password);
+        var options = new HomebrewOptions(uint.Parse(DmrId.Trim()), host, port, Password)
+        {
+            OptionsString = BuildTalkgroupOptions()
+        };
 
         var client = new HomebrewClient(options);
         client.Log += message => Post(() => AddLog(message));
@@ -337,6 +403,7 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task DisconnectAsync()
     {
+        await StopTransmitAsync();
         var client = _client;
         _client = null;
 
@@ -355,6 +422,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         _client = null;
+        StopTransmit();
         EndCall();
         State = LinkState.Disconnected;
         ErrorText = reason;
@@ -363,10 +431,31 @@ public sealed class MainViewModel : ObservableObject
         _ = client.DisposeAsync().AsTask();
     }
 
+    private string BuildTalkgroupOptions() => $"TS{_selectedSlot}={SelectedTg.Number}";
+
+    private async Task UpdateServerOptionsAsync()
+    {
+        var client = _client;
+        if (client is null || !IsConnected)
+            return;
+
+        try
+        {
+            await client.SendOptionsAsync(BuildTalkgroupOptions());
+            AddLog($"Požadavek FreeDMR: {BuildTalkgroupOptions()}.");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Nastavení talkgroupu se nepodařilo odeslat: {ex.Message}");
+        }
+    }
+
     /// <summary>Volá se při ukončení aplikace.</summary>
     private void Shutdown()
     {
         SaveSettings();
+        StopTransmit();
+        EndCall();
 
         var client = _client;
         _client = null;
@@ -384,18 +473,30 @@ public sealed class MainViewModel : ObservableObject
 
     private void OnPacket(DmrdPacket p)
     {
+        if ((uint.TryParse(DmrId, out var ownId) && p.Source == ownId) ||
+            p.IsPrivate || p.Destination.ToString() != SelectedTg.Number ||
+            (p.Slot2 ? 2 : 1) != _selectedSlot)
+            return;
+
         // Zbytek hovoru, který už jsme ukončili terminátorem.
         if (p.StreamId == _lastEndedStream)
             return;
 
-        if (!_callActive)
+        if (!_callActive && p.FrameType is DmrFrameType.Voice or DmrFrameType.VoiceSync)
             BeginCall(p);
         else if (p.StreamId != _activeStream)
-            return; // souběžný hovor na druhém slotu – zatím ignorujeme
+            return;
+
+        if (!_callActive || p.StreamId != _activeStream)
+            return;
 
         _lastPacketTick = Environment.TickCount64;
 
-        // TODO: z p.Burst vytáhnout 3 × AMBE rámec a poslat do dekodéru.
+        if (p.FrameType is DmrFrameType.Voice or DmrFrameType.VoiceSync)
+        {
+            foreach (var frame in DmrVoiceBurstCodec.ExtractAmbeFrames(p.Burst))
+                _jitterBuffer?.AddFrame(frame);
+        }
 
         if (p.IsTerminator)
             EndCall();
@@ -418,12 +519,16 @@ public sealed class MainViewModel : ObservableObject
         _callTimer.Start();
 
         AddLog($"RX: {p.Source} → {(p.IsPrivate ? "privátně " : "TG ")}{p.Destination} (TS{_slot})");
+        StartAudio();
     }
 
     private void EndCall()
     {
         if (!_callActive)
+        {
+            StopAudio();
             return;
+        }
 
         _callActive = false;
         _callTimer.Stop();
@@ -435,7 +540,131 @@ public sealed class MainViewModel : ObservableObject
         Level = 0;
         ElapsedText = "00:00";
         IsReceiving = false;
+        StopAudio();
         AddLog($"Konec hovoru ({seconds:0.0} s).");
+    }
+
+    private void StopAudio()
+    {
+        var jitterBuffer = _jitterBuffer;
+        _jitterBuffer = null;
+        _audioPlayer = null;
+        if (jitterBuffer is not null)
+        {
+            try { jitterBuffer.Dispose(); }
+            catch (Exception ex) { AddLog($"Audio se nepodařilo korektně uvolnit: {ex.Message}"); }
+        }
+    }
+
+    private void StartAudio()
+    {
+        StopAudio();
+        try
+        {
+            _audioPlayer = new AudioPlayer(SelectedAudioOutputDevice.DeviceNumber) { Volume = Volume };
+            var vocoder = OpenDmrVocoder.CreateOrFallback(out var warning);
+            if (warning is not null)
+                AddLog($"RX bude tichý (chybí AMBE+2 dekodér): {warning}. Spusť scripts\\Build-OpenDmr.ps1 a aplikaci znovu sestav.");
+            else
+                AddLog("OpenDMR AMBE+2 dekodér je aktivní.");
+            _jitterBuffer = new JitterBuffer(vocoder, _audioPlayer)
+            {
+                TargetLatencyMs = 60
+            };
+            _jitterBuffer.DecodeError += exception => Post(() =>
+                AddLog($"Chyba dekódování AMBE+2: {exception.Message}"));
+            _jitterBuffer.LevelChanged += level => Post(() =>
+            {
+                if (_callActive)
+                    Level = level;
+            });
+            _jitterBuffer.Start();
+        }
+        catch (Exception ex)
+        {
+            var jitterBuffer = _jitterBuffer;
+            _jitterBuffer = null;
+            try
+            {
+                if (jitterBuffer is not null)
+                    jitterBuffer.Dispose();
+                else
+                    _audioPlayer?.Dispose();
+            }
+            catch { }
+            _audioPlayer = null;
+            AddLog($"Zvukový výstup „{SelectedAudioOutputDevice.Name}“ není dostupný: {ex.Message}");
+        }
+    }
+
+    public void StartTransmit()
+    {
+        var client = _client;
+        if (!CanTransmit || client is null || !uint.TryParse(SelectedTg.Number, out var destination))
+            return;
+
+        var cancellation = new CancellationTokenSource();
+        var vocoder = OpenDmrVocoder.CreateOrFallback(out var warning);
+        if (warning is not null)
+            AddLog($"TX používá tichý NullVocoder: {warning}.");
+        var manager = new TxManager(
+            client,
+            vocoder,
+            uint.Parse(DmrId),
+            destination,
+            uint.Parse(DmrId),
+            _selectedSlot == 2,
+            (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue),
+            message => Post(() => AddLog(message)));
+
+        _txCts = cancellation;
+        IsTransmitting = true;
+        AddLog($"TX: otevírám TG {destination} (TS{_selectedSlot}), bez audia.");
+        _txTask = RunTransmitAsync(manager, cancellation);
+    }
+
+    public void StopTransmit()
+    {
+        try { _txCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
+
+    private async Task StopTransmitAsync()
+    {
+        StopTransmit();
+        if (_txTask is not null)
+        {
+            try { await _txTask.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch (Exception) { }
+        }
+    }
+
+    private async Task RunTransmitAsync(TxManager manager, CancellationTokenSource cancellation)
+    {
+        using (manager)
+        {
+            try
+            {
+                await manager.RunAsync(cancellation.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AddLog($"TX se nezdařilo: {ex.Message}");
+            }
+        }
+
+        cancellation.Dispose();
+        Post(() =>
+        {
+            if (ReferenceEquals(_txCts, cancellation))
+            {
+                _txCts = null;
+                _txTask = null;
+                IsTransmitting = false;
+                AddLog("TX ukončeno.");
+            }
+        });
     }
 
     private void OnCallTimerTick()
@@ -490,6 +719,7 @@ public sealed class MainViewModel : ObservableObject
             Password = Password,
             TalkGroup = SelectedTg.Number,
             Volume = Volume,
+            AudioOutputDeviceNumber = SelectedAudioOutputDevice.DeviceNumber,
         });
 
         if (!ok)
