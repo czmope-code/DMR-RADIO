@@ -8,6 +8,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using DMR_RADIO.Mvvm;
+using System.ComponentModel;
+using DMR_RADIO.ViewModels;
 
 namespace DMR_RADIO
 {
@@ -16,9 +19,26 @@ namespace DMR_RADIO
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly MainViewModel _vm = new();
+
         public MainWindow()
         {
             InitializeComponent();
+            DataContext = _vm;
         }
+
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ButtonState == MouseButtonState.Pressed)
+                DragMove();
+        }
+
+        private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+            => _vm.Password = ((PasswordBox)sender).Password;
     }
 }
+

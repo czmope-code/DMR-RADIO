@@ -4,9 +4,728 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DMR_RADIO"
+        xmlns:vm="clr-namespace:DMR_RADIO.ViewModels"
+        xmlns:conv="clr-namespace:DMR_RADIO.Converters"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        Title="DMR Radio" Height="700" Width="1100"
+        MinHeight="660" MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanMinimize"
+        Background="#0B0E13" FontFamily="Segoe UI" FontSize="14"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
-    </Grid>
+    <Window.Resources>
+
+        <!-- ===== Barvy ===== -->
+        <SolidColorBrush x:Key="BgBrush" Color="#0B0E13"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#121821"/>
+        <SolidColorBrush x:Key="PanelEdgeBrush" Color="#232B38"/>
+        <SolidColorBrush x:Key="FieldBrush" Color="#0D1218"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#E6EAF0"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#7C8798"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFB547"/>
+        <SolidColorBrush x:Key="LcdTextBrush" Color="#FFB547"/>
+
+        <conv:BoolToBrushConverter x:Key="BoolBrush"/>
+
+        <!-- ===== Textové styly ===== -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+        </Style>
+
+        <Style x:Key="LedLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="LcdSmall" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource LcdTextBrush}"/>
+            <Setter Property="Opacity" Value="0.75"/>
+        </Style>
+
+        <Style x:Key="LcdMid" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource LcdTextBrush}"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#FFB547" BlurRadius="10" ShadowDepth="0" Opacity="0.35"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="LcdBig" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="76"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource LcdTextBrush}"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#FFB547" BlurRadius="18" ShadowDepth="0" Opacity="0.55"/>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsReceiving}" Value="False">
+                    <Setter Property="Opacity" Value="0.28"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ===== Okenní tlačítka ===== -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1C2330"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E5484D"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Vstupní pole ===== -->
+        <Style x:Key="FieldBox" TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="SelectionBrush" Value="#7A5818"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bd" Background="{StaticResource FieldBrush}"
+                                BorderBrush="{StaticResource PanelEdgeBrush}"
+                                BorderThickness="1" CornerRadius="8">
+                            <Grid>
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"/>
+                                <TextBlock x:Name="Ph" Text="{TemplateBinding Tag}" Foreground="#4A5465"
+                                           Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                           IsHitTestVisible="False" Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="Ph" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FieldPassword" TargetType="PasswordBox">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="SelectionBrush" Value="#7A5818"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Bd" Background="{StaticResource FieldBrush}"
+                                BorderBrush="{StaticResource PanelEdgeBrush}"
+                                BorderThickness="1" CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Tlačítka ===== -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="#1A1203"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.72"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter Property="Background" Value="#E5484D"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SmallButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" BorderBrush="{StaticResource PanelEdgeBrush}"
+                                BorderThickness="1" CornerRadius="6" Padding="10,4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PttButton" TargetType="Button">
+            <Setter Property="Width" Value="104"/>
+            <Setter Property="Height" Value="104"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root">
+                            <Ellipse Fill="#0A0D12" Stroke="#2A3342" StrokeThickness="2"/>
+                            <Ellipse Margin="9">
+                                <Ellipse.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#FF5A5F" Offset="0"/>
+                                        <GradientStop Color="#B3262B" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Slider (hlasitost) ===== -->
+        <Style x:Key="TrackHitButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Grid Background="Transparent"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SliderFillButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Grid Background="Transparent">
+                            <Border Height="4" CornerRadius="2" Background="{StaticResource AccentBrush}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="KnobThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Ellipse Width="20" Height="20" Stroke="{StaticResource AccentBrush}" StrokeThickness="2">
+                            <Ellipse.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#3A4352" Offset="0"/>
+                                    <GradientStop Color="#1B212B" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="VolumeSlider" TargetType="Slider">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Height="26">
+                            <Border Height="4" CornerRadius="2" Background="#1E2632" VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource SliderFillButton}"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource KnobThumb}"/>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource TrackHitButton}"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Oblíbené talkgroupy ===== -->
+        <Style x:Key="TgItem" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="{StaticResource FieldBrush}"
+                                BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1"
+                                CornerRadius="8" Padding="12,7">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4A5465"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33250A"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Tenký posuvník pro log ===== -->
+        <Style x:Key="ScrollThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="#2A3342" CornerRadius="3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar" x:Key="SlimScrollBar">
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource TrackHitButton}"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ScrollThumb}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource TrackHitButton}"/>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+    <Border BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ================= Titulek ================= -->
+            <Grid Grid.Row="0" Background="#0F131A" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <StackPanel Orientation="Horizontal" Margin="18,0" VerticalAlignment="Center">
+                    <Ellipse Width="9" Height="9"
+                             Fill="{Binding IsConnected, Converter={StaticResource BoolBrush}, ConverterParameter=#3DDC84}"/>
+                    <TextBlock Text="DMR RADIO" FontWeight="Bold" FontSize="12"
+                               Foreground="{StaticResource TextBrush}" Margin="10,0,0,0"/>
+                    <TextBlock Text="Homebrew · příjem" FontSize="12"
+                               Foreground="{StaticResource MutedBrush}" Margin="12,0,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click"/>
+                    <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- ================= Obsah ================= -->
+            <Grid Grid.Row="1" Margin="20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="330"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== Tělo rádia ===== -->
+                <Border Grid.Column="0" CornerRadius="22" BorderBrush="#2A3342" BorderThickness="1">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#1B222D" Offset="0"/>
+                            <GradientStop Color="#10151D" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="30" ShadowDepth="8" Opacity="0.5"/>
+                    </Border.Effect>
+
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- LED indikátory -->
+                        <Grid Grid.Row="0" Margin="26,20,26,0">
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,24,0">
+                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                             Fill="{Binding IsConnected, Converter={StaticResource BoolBrush}, ConverterParameter=#3DDC84}"/>
+                                    <TextBlock Text="LINK" Style="{StaticResource LedLabel}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,24,0">
+                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                             Fill="{Binding IsReceiving, Converter={StaticResource BoolBrush}, ConverterParameter=#FFB547}"/>
+                                    <TextBlock Text="RX" Style="{StaticResource LedLabel}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                             Fill="{Binding IsTransmitting, Converter={StaticResource BoolBrush}, ConverterParameter=#FF4D4D}"/>
+                                    <TextBlock Text="TX" Style="{StaticResource LedLabel}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Text="DMR · HOMEBREW" HorizontalAlignment="Right"
+                                       FontSize="11" FontWeight="SemiBold" Foreground="#4A5465"/>
+                        </Grid>
+
+                        <!-- LCD displej -->
+                        <Border Grid.Row="1" Margin="22,16" CornerRadius="14"
+                                BorderBrush="#05070A" BorderThickness="3">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#1B1409" Offset="0"/>
+                                    <GradientStop Color="#0E0A05" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+
+                            <Grid Margin="30,20">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- stavový řádek -->
+                                <Grid Grid.Row="0">
+                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource LcdSmall}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding SlotText}" Style="{StaticResource LcdSmall}" Margin="0,0,20,0"/>
+                                        <TextBlock Text="{Binding ElapsedText}" Style="{StaticResource LcdSmall}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- volací znak -->
+                                <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CallsignText}" Style="{StaticResource LcdBig}"/>
+                                    <TextBlock Text="{Binding DetailText}" Style="{StaticResource LcdMid}" Margin="4,6,0,0"/>
+                                </StackPanel>
+
+                                <!-- talkgroup -->
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="{Binding SelectedTg.Label}" Style="{StaticResource LcdMid}" FontSize="28"/>
+                                    <TextBlock Text="{Binding SelectedTg.Name}" Style="{StaticResource LcdSmall}"
+                                               Margin="16,0,0,4" VerticalAlignment="Bottom"/>
+                                </StackPanel>
+
+                                <!-- VU metr -->
+                                <ItemsControl Grid.Row="3" ItemsSource="{Binding MeterSegments}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Rows="1"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="1.5,0" Height="18" CornerRadius="2"
+                                                    Background="{Binding OnBrush}">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Opacity" Value="0.12"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsOn}" Value="True">
+                                                                <Setter Property="Opacity" Value="1"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                        </Border>
+
+                        <!-- Ovládací prvky -->
+                        <Grid Grid.Row="2" Margin="26,4,26,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- hlasitost -->
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <Grid>
+                                    <TextBlock Text="HLASITOST" Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Text="{Binding VolumeText}" HorizontalAlignment="Right"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentBrush}"/>
+                                </Grid>
+                                <Slider Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="100"
+                                        Value="{Binding Volume, Mode=TwoWay}"/>
+                            </StackPanel>
+
+                            <!-- talkgroupy -->
+                            <StackPanel Grid.Column="1" Margin="30,0" VerticalAlignment="Center">
+                                <TextBlock Text="TALKGROUP" Style="{StaticResource FieldLabel}"/>
+                                <ListBox ItemsSource="{Binding Favorites}"
+                                         SelectedItem="{Binding SelectedTg, Mode=TwoWay}"
+                                         ItemContainerStyle="{StaticResource TgItem}"
+                                         Background="Transparent" BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="14"
+                                                           Foreground="{StaticResource TextBrush}"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="11"
+                                                           Foreground="{StaticResource MutedBrush}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+
+                            <!-- PTT -->
+                            <Button Grid.Column="2" Style="{StaticResource PttButton}" Content="PTT"
+                                    IsEnabled="{Binding CanTransmit}"
+                                    ToolTip="Vysílání (TX) zatím není implementováno"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- ===== Panel připojení ===== -->
+                <Border Grid.Column="2" Background="{StaticResource PanelBrush}" CornerRadius="18"
+                        BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1" Padding="22">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- formulář -->
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="PŘIPOJENÍ" Style="{StaticResource SectionTitle}"/>
+
+                            <TextBlock Text="DMR ID" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Style="{StaticResource FieldBox}" Margin="0,0,0,14"
+                                     Text="{Binding DmrId, UpdateSourceTrigger=PropertyChanged}"
+                                     Tag="např. 2301234" MaxLength="9"
+                                     IsEnabled="{Binding IsEditable}"/>
+
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="92"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="SERVER" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Style="{StaticResource FieldBox}"
+                                             Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}"
+                                             Tag="adresa serveru"
+                                             IsEnabled="{Binding IsEditable}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="PORT" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Style="{StaticResource FieldBox}" MaxLength="5"
+                                             Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}"
+                                             Tag="62031"
+                                             IsEnabled="{Binding IsEditable}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="HESLO HOTSPOTU" Style="{StaticResource FieldLabel}"/>
+                            <PasswordBox Style="{StaticResource FieldPassword}"
+                                         PasswordChanged="PasswordBox_PasswordChanged"
+                                         IsEnabled="{Binding IsEditable}"/>
+                        </StackPanel>
+
+                        <!-- stav + tlačítko -->
+                        <StackPanel Grid.Row="1" Margin="0,18,0,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                         Fill="{Binding IsConnected, Converter={StaticResource BoolBrush}, ConverterParameter=#3DDC84}"/>
+                                <TextBlock Text="{Binding StatusText}" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource MutedBrush}" Margin="8,0,0,0"/>
+                            </StackPanel>
+
+                            <Button Style="{StaticResource PrimaryButton}"
+                                    Content="{Binding ConnectButtonText}"
+                                    Command="{Binding ConnectCommand}"/>
+
+                            <TextBlock Text="{Binding ErrorText}" Foreground="#FF6B6B" FontSize="12"
+                                       TextWrapping="Wrap" Margin="0,10,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ErrorText}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- log -->
+                        <Grid Grid.Row="2" Margin="0,22,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="0,0,0,10">
+                                <TextBlock Text="LOG" Style="{StaticResource FieldLabel}" Margin="0" VerticalAlignment="Center"/>
+                                <Button Style="{StaticResource SmallButton}" Content="DEMO RX"
+                                        HorizontalAlignment="Right" Command="{Binding DemoRxCommand}"
+                                        ToolTip="Nasimuluje příchozí hovor (jen pro ukázku vzhledu)"/>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="{StaticResource FieldBrush}"
+                                    BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1"
+                                    CornerRadius="8" Padding="10,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ScrollViewer.Resources>
+                                        <Style TargetType="ScrollBar" BasedOn="{StaticResource SlimScrollBar}"/>
+                                    </ScrollViewer.Resources>
+                                    <ItemsControl ItemsSource="{Binding LogLines}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11.5"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           TextWrapping="Wrap" Margin="0,0,0,3"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
 </Window>
