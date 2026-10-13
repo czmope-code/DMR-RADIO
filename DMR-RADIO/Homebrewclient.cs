@@ -96,6 +96,7 @@ public readonly record struct DmrdPacket(
 public sealed record HomebrewOptions(uint RadioId, string Host, int Port, string Password)
 {
     public string Callsign { get; init; } = "";
+    public string OptionsString { get; init; } = "";
     public uint RxFrequencyHz { get; init; } = 439000000;
     public uint TxFrequencyHz { get; init; } = 439000000;
     public int TxPower { get; init; } = 1;
@@ -321,6 +322,8 @@ public sealed class HomebrewClient : IAsyncDisposable
             case Stage.Config:
                 _stage = Stage.Connected;
                 WriteLog("Konfigurace schválena serverem. Navázáno stabilní spojení!");
+                if (!string.IsNullOrWhiteSpace(_opt.OptionsString))
+                    await SendOptionsAsync(_opt.OptionsString, ct).ConfigureAwait(false);
                 _loginDone.TrySetResult();
                 break;
         }
@@ -374,6 +377,31 @@ public sealed class HomebrewClient : IAsyncDisposable
             default:
                 return Task.CompletedTask;
         }
+    }
+
+    /// <summary>Pošle FreeDMR/Homebrew seznam požadovaných talkgroupů zprávou RPTO.</summary>
+    public Task SendOptionsAsync(string options, CancellationToken ct = default)
+    {
+        if (_stage != Stage.Connected)
+            throw new InvalidOperationException("RPTO lze odesílat pouze po připojení.");
+
+        WriteLog("Odesílám RPTO s nastavením požadovaných talkgroupů.");
+        return SendAsync(BuildOptionsPacket(_opt.RadioId, options), ct);
+    }
+
+    /// <summary>Sestaví RPTO paket pro otestovatelné kódování options stringu.</summary>
+    public static byte[] BuildOptionsPacket(uint radioId, string options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Length > 1024 || options.Any(c => c > 0x7F || char.IsControl(c)))
+            throw new ArgumentException("Options string musí být nejvýše 1024 tisknutelných ASCII znaků.", nameof(options));
+
+        var optionBytes = Encoding.ASCII.GetBytes(options);
+        var packet = new byte[8 + optionBytes.Length];
+        "RPTO"u8.CopyTo(packet);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), radioId);
+        optionBytes.CopyTo(packet, 8);
+        return packet;
     }
 
     private async Task SendAsync(byte[] data, CancellationToken ct)

@@ -157,7 +157,7 @@ public sealed class MainViewModel : ObservableObject
         set => Set(ref _port, value);
     }
 
-    /// <summary>Heslo hotspotu (BrandMeister SelfCare). Nastavuje se z PasswordBoxu.</summary>
+    /// <summary>Sdílené heslo Homebrew serveru. Nastavuje se z PasswordBoxu.</summary>
     public string Password { get; set; } = "";
 
     public string ErrorText
@@ -215,6 +215,7 @@ public sealed class MainViewModel : ObservableObject
             StopTransmit();
             EndCall();
             AddLog($"Vybrána {value.Label} ({value.Name}).");
+            _ = UpdateServerOptionsAsync();
             SaveSettings();
         }
     }
@@ -232,6 +233,7 @@ public sealed class MainViewModel : ObservableObject
             StopTransmit();
             EndCall();
             AddLog($"Vybrán timeslot {_selectedSlot}.");
+            _ = UpdateServerOptionsAsync();
         }
     }
 
@@ -369,7 +371,10 @@ public sealed class MainViewModel : ObservableObject
 
         var host = Server.Trim();
         var port = int.Parse(Port.Trim());
-        var options = new HomebrewOptions(uint.Parse(DmrId.Trim()), host, port, Password);
+        var options = new HomebrewOptions(uint.Parse(DmrId.Trim()), host, port, Password)
+        {
+            OptionsString = BuildTalkgroupOptions()
+        };
 
         var client = new HomebrewClient(options);
         client.Log += message => Post(() => AddLog(message));
@@ -424,6 +429,25 @@ public sealed class MainViewModel : ObservableObject
         AddLog($"Spojení ztraceno: {reason}");
 
         _ = client.DisposeAsync().AsTask();
+    }
+
+    private string BuildTalkgroupOptions() => $"TS{_selectedSlot}={SelectedTg.Number}";
+
+    private async Task UpdateServerOptionsAsync()
+    {
+        var client = _client;
+        if (client is null || !IsConnected)
+            return;
+
+        try
+        {
+            await client.SendOptionsAsync(BuildTalkgroupOptions());
+            AddLog($"Požadavek FreeDMR: {BuildTalkgroupOptions()}.");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Nastavení talkgroupu se nepodařilo odeslat: {ex.Message}");
+        }
     }
 
     /// <summary>Volá se při ukončení aplikace.</summary>
